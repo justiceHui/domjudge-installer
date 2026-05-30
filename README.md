@@ -223,6 +223,42 @@ bash ~/dj900start.sh
 
 ---
 
+## D. domserver 성능 튜닝: `dj900mas.sh`
+
+대회 규모가 커지면 동시 접속(참가자 스코어보드 새로고침, judgehost 체크인)을 감당할 만큼 PHP-FPM worker 수를 늘려야 합니다. `dj900mas.sh`(**M**emory **A**uto**S**caling)는 domserver 의 메모리 크기에 맞춰 PHP-FPM 의 `pm.max_children` 값을 자동으로 조정해 주는 스크립트입니다.
+
+참고: [DOMjudge Wiki — Scaling and load testing](https://github.com/DOMjudge/domjudge/wiki/Scaling-and-load-testing)
+
+### 무슨 일을 하나
+
+* 현재 머신의 물리 메모리(GiB)를 읽어 `/etc/php/8.3/fpm/pool.d/domjudge.conf` 의 `pm.max_children` 를 **1GiB 당 20** 으로 설정합니다. (예: 8GiB → 160, 16GiB → 320)
+* `pm.max_children` 값이 **실제로 바뀐 경우에만** php8.3-fpm 을 재시작하고 웹서버(nginx/apache2)를 reload 합니다. 즉 이 스크립트를 실행하면 **별도의 수동 서비스 재시작이 필요 없습니다.**
+* `dj900mas.sh` 는 **MariaDB 설정을 변경하지 않으며, MariaDB 를 재시작하지도 않습니다.** (PHP-FPM 풀 설정만 다루므로 DB 를 건드릴 이유가 없습니다.)
+
+### 언제·어떻게 실행하나
+
+`dj900mas.sh` 는 `dj900server.sh` 가 설치 과정에서 domserver 의 홈 디렉터리에 내려받아 두고, `/etc/rc.local` 에 등록해 둡니다.
+
+* **인스턴스 메모리를 변경한 경우**(예: 8GiB → 16GiB 로 리사이즈): 다음 중 하나면 충분합니다.
+  * 그냥 **재부팅** → 부팅 시 `rc.local` 이 `dj900mas.sh` 를 자동 실행해 새 메모리에 맞게 `pm.max_children` 를 다시 계산합니다. (인스턴스 reboot 만으로 적용됨)
+  * 재부팅 없이 즉시 적용하려면 domserver 에서 직접 실행:
+
+    ```bash
+    ssh jhnah917@test.icpc.kr
+    bash dj900mas.sh
+    ```
+
+    `pm.max_children` 가 바뀌면 스크립트가 php-fpm 을 재시작하고 웹서버를 reload 하므로 **추가 재시작/재부팅은 불필요**합니다.
+* **메모리 변화가 없으면** 스크립트는 `pm.max_children` 가 이미 목표값과 같음을 감지하고 아무것도 바꾸거나 재시작하지 않습니다.
+
+### 주의 사항
+
+* **`pm.max_children` 를 더 높게/낮게 직접 조정할 수도 있습니다.** 위키는 worker 1개가 실제로 약 **70MiB** 를 쓴다고 안내합니다(=1GiB 당 약 22개). `dj900mas.sh` 의 기본값은 **1GiB 당 20개**(worker 당 ~50MiB 가정)로 위키 권장치에 가깝게 보수적으로 잡혀 있습니다. 더 많은 동시 접속을 받아야 하거나 반대로 메모리 부족(OOM)이 우려되면 `/etc/php/8.3/fpm/pool.d/domjudge.conf` 의 `pm.max_children` 를 수동으로 조정한 뒤 `sudo service php8.3-fpm restart` 하세요.
+* MariaDB 의 `max_connections` 는 전체 FPM worker 수 이상이어야 합니다. 설치 스크립트가 이미 `max_connections = 8192` 로 넉넉히 설정하므로 대부분의 경우 추가 조정이 필요 없습니다.
+* **DB 튜닝은 별도입니다.** `dj900mas.sh` 는 PHP-FPM 만 다루고 MariaDB 는 건드리지 않습니다. DB 설정(`max_connections` 등)은 설치 시점에 `dj900server.sh`(local) 또는 `dj900db.sh`(external) 가 정하며, 분리(external) 모드에서 DB 를 추가로 튜닝하려면 **db 머신**에서 직접 수행해야 합니다.
+
+---
+
 ## 참고 명령
 
 * domserver 캐시 정리: `bash dj900clear.sh` (domserver 에 자동 설치됨)

@@ -46,7 +46,7 @@ if [ ${MEMS} -lt 1 ] ; then
 fi
 
 #set to H/W memory size
-MEMSNOW=$(($MEMS*40))
+MEMSNOW=$(($MEMS*20))
 MEMSSET=$(grep "pm.max_children =" /etc/php/8.3/fpm/pool.d/domjudge.conf | awk '{print $3}')
 
 if [[ $MEMSSET -ne $MEMSNOW ]] ; then
@@ -54,30 +54,31 @@ if [[ $MEMSSET -ne $MEMSNOW ]] ; then
   echo "H/W memory size changed!!"
   echo ""
   MEMSTRING=$(grep "pm.max_children =" /etc/php/8.3/fpm/pool.d/domjudge.conf)
-  NEWSTRING="pm.max_children = ${MEMSNOW}      ; 40 per 1GiB memory(16GiB -> 640)"
+  NEWSTRING="pm.max_children = ${MEMSNOW}      ; 20 per 1GiB memory(16GiB -> 320)"
   sudo sed -i "s:${MEMSTRING}:${NEWSTRING}:g" /etc/php/8.3/fpm/pool.d/domjudge.conf
   echo "pm.max_children value changed to ${MEMSNOW}"
   echo ""
-fi
 
-echo ""
-echo "Restarting php..."
-sudo service php8.3-fpm restart
-sudo service php8.3-fpm reload
-echo ""
-echo "Restarting mariadb..."
-sudo systemctl restart mariadb
-echo ""
-WEBSERVER=$(curl -is localhost | grep "Server" | awk '{print $2}')
-if [[ ${WEBSERVER} == Apache* ]] ; then
-  echo "Restarting apache2..."
-  sudo systemctl restart apache2
-  sudo systemctl reload apache2
-fi
-if [[ ${WEBSERVER} == nginx* ]] ; then
-  echo "Restarting nginx..."
-  sudo systemctl restart nginx
-  sudo systemctl reload nginx
+  #Only the PHP-FPM pool config changed, so restart php-fpm to apply pm.max_children.
+  #MariaDB config is untouched by this script, so MariaDB is NOT restarted here.
+  echo "Restarting php..."
+  sudo service php8.3-fpm restart
+  echo ""
+
+  #Reload the webserver so it re-establishes FastCGI connections to the new fpm workers.
+  WEBSERVER=$(curl -is localhost | grep "Server" | awk '{print $2}')
+  if [[ ${WEBSERVER} == Apache* ]] ; then
+    echo "Reloading apache2..."
+    sudo systemctl reload apache2
+  fi
+  if [[ ${WEBSERVER} == nginx* ]] ; then
+    echo "Reloading nginx..."
+    sudo systemctl reload nginx
+  fi
+else
+  echo ""
+  echo "pm.max_children already set to ${MEMSNOW}. No changes needed."
+  echo ""
 fi
 
 echo ""
