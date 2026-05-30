@@ -25,7 +25,7 @@
 
 
 #terminal commands to install dedicated DOMjudge server
-#wget https://raw.githubusercontent.com/justiceHui/domjudge-installer/main/dj900server.sh
+#wget https://raw.githubusercontent.com/melongist/CSL/master/DOMjudge/dj900server.sh
 #bash dj900server.sh
 
 #------
@@ -282,7 +282,7 @@ esac
 #wget https://www.domjudge.org/releases/domjudge-X.X.X.tar.gz
 #tar xvf domjudge-X.X.X.tar.gz
 #cd domjudge-X.X.X
-wget https://raw.githubusercontent.com/justiceHui/domjudge-installer/main/${DOMVER}.tar.gz
+wget https://raw.githubusercontent.com/melongist/CSL/master/DOMjudge/${DOMVER}.tar.gz
 tar xvf ${DOMVER}.tar.gz
 rm ${DOMVER}.tar.gz
 
@@ -304,29 +304,10 @@ case ${DBMODE} in
     sudo ./dj_setup_database -u root -r install
     ;;
   "external")
-    #Point dbpasswords.secret to the remote DB so the running webapp connects to it.
-    #gendbpasswords writes 'unused:localhost:domjudge:domjudge:<pass>:3306', so the DB
-    #host is the 2nd ':'-field (the 1st field is the literal 'unused', NOT 'default').
-    sudo sed -i "s/^unused:localhost:/unused:${DBHOST}:/" /opt/domjudge/domserver/etc/dbpasswords.secret
-    #Read the generated 'domjudge' app-user password (5th ':'-field) to grant remote access.
-    DJDBPASS=$(sudo grep "^unused:" /opt/domjudge/domserver/etc/dbpasswords.secret | cut -d: -f5)
-    #dj_setup_database's 'install' loads default/example data AS the 'domjudge' user, but it
-    #only ever grants 'domjudge'@'localhost'. From the domserver that connection is remote,
-    #so the app user must have remote access on ${DBHOST} BEFORE 'install' runs, otherwise
-    #the load-default-data step fails mid-install. The DB firewall (dj900db.sh) already
-    #restricts 3306 to the domserver, so granting to '%' is safe here.
-    echo ""
-    echo "Enter the MariaDB root password (set by dj900db.sh on ${DBHOST}) to grant the 'domjudge' app user remote access:"
-    mysql -u root -p -h ${DBHOST} <<EOF
-CREATE DATABASE IF NOT EXISTS \`domjudge\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS 'domjudge'@'%' IDENTIFIED BY '${DJDBPASS}';
-GRANT SELECT, INSERT, UPDATE, DELETE ON \`domjudge\`.* TO 'domjudge'@'%';
-FLUSH PRIVILEGES;
-EOF
-    #The admin connection host is read from dbpasswords.secret above; dj_setup_database has
-    #no -h option (optstring is ':u:p:qrs'), so passing -h would abort with usage/exit 1.
-    #You must input the MariaDB root password set by dj900db.sh on ${DBHOST}.
-    sudo ./dj_setup_database -u root -r install
+    #Point dbpasswords.secret to the remote DB so the running webapp connects to it
+    sudo sed -i "s/^default:localhost:/default:${DBHOST}:/" /opt/domjudge/domserver/etc/dbpasswords.secret
+    #You must input the MariaDB root password set by dj900db.sh on ${DBHOST}
+    sudo ./dj_setup_database -u root -h ${DBHOST} -r install
     ;;
 esac
 
@@ -450,11 +431,11 @@ sudo apt autoremove -y
 
 
 #Other script set download
-wget https://raw.githubusercontent.com/justiceHui/domjudge-installer/main/dj900clear.sh
-wget https://raw.githubusercontent.com/justiceHui/domjudge-installer/main/dj900mas.sh
-wget https://raw.githubusercontent.com/justiceHui/domjudge-installer/main/dj900https.sh
+wget https://raw.githubusercontent.com/melongist/CSL/master/DOMjudge/dj900clear.sh
+wget https://raw.githubusercontent.com/melongist/CSL/master/DOMjudge/dj900mas.sh
+wget https://raw.githubusercontent.com/melongist/CSL/master/DOMjudge/dj900https.sh
 #Korean translation
-#wget https://raw.githubusercontent.com/justiceHui/domjudge-installer/main/dj900kr.sh
+#wget https://raw.githubusercontent.com/melongist/CSL/master/DOMjudge/dj900kr.sh
 
 
 #Memory autoscaling for php(fpm)
